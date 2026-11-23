@@ -1,18 +1,54 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { supabase } from '@/lib/supabase';
+import { Suspense, useEffect, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
+import { supabase } from '@/app/lib/supabase';
 import {
   obtenerVersiculoMidvash,
   obtenerVersiculoDelDiaMidvash,
-} from '@/lib/midvash';
-
+} from '@/app/lib/midvash';
 const ESTADOS_ANIMO = ['Todos', 'Paz', 'Fortaleza', 'Consuelo', 'Gratitud'];
 
-export default function BuscadorPage() {
+const MAPA_VERSIONES = {
+  rvr1909: {
+    etiqueta: 'Reina-Valera 1909',
+    claves: ['RVR1909', 'REINA-VALERA', 'REINA VALERA'],
+  },
+  rvg: {
+    etiqueta: 'Reina-Valera Gómez',
+    claves: ['RVG', 'REINA-VALERA GÓMEZ', 'REINA VALERA GOMEZ', 'GÓMEZ', 'GOMEZ'],
+  },
+  pdt: {
+    etiqueta: 'Palabra de Dios para ti',
+    claves: ['PDT', 'PALABRA DE DIOS PARA TI'],
+  },
+  'onbv-es': {
+    etiqueta: 'Open Nueva Biblia Viva',
+    claves: ['ONBV-ES', 'NUEVA BIBLIA VIVA'],
+  },
+  sev: {
+    etiqueta: 'Sagradas Escrituras 1569',
+    claves: ['SEV', 'SAGRADAS ESCRITURAS'],
+  },
+};
+
+function coincideConVersion(item, codigoVersion) {
+  if (!codigoVersion || codigoVersion === 'todas') return true;
+  const info = MAPA_VERSIONES[codigoVersion];
+  if (!info) return true;
+
+  const textoComparar = `${item.badge || ''} ${item.subtitulo || ''} ${item.referencia || ''}`.toUpperCase();
+  return info.claves.some((clave) => textoComparar.includes(clave.toUpperCase()));
+}
+
+function BuscadorContenido() {
+  const searchParams = useSearchParams();
+  const estadoInicial = searchParams.get('estado');
+
+  const [darkMode, setDarkMode] = useState(false);
   const [busqueda, setBusqueda] = useState('');
   const [estadoSeleccionado, setEstadoSeleccionado] = useState('Todos');
-  const [versionBiblia, setVersionBiblia] = useState('rvr1909');
+  const [versionBiblia, setVersionBiblia] = useState('todas');
 
   const [versiculosDb, setVersiculosDb] = useState([]);
   const [cargandoDb, setCargandoDb] = useState(true);
@@ -22,19 +58,47 @@ export default function BuscadorPage() {
   const [errorBiblia, setErrorBiblia] = useState('');
 
   useEffect(() => {
-    async function cargarVersiculos() {
-      setCargandoDb(true);
-      const { data, error } = await supabase
-        .from('versiculos')
-        .select('*')
-        .order('created_at', { ascending: false });
+    const saved = localStorage.getItem('lumina-theme');
+    const isDark = saved
+      ? saved === 'dark'
+      : document.body.classList.contains('dark-mode');
+    setDarkMode(isDark);
+    document.body.classList.toggle('dark-mode', isDark);
+  }, []);
 
-      if (!error && Array.isArray(data)) {
-        setVersiculosDb(data);
-      }
-      setCargandoDb(false);
+  const toggleTheme = () => {
+    const next = !darkMode;
+    setDarkMode(next);
+    document.body.classList.toggle('dark-mode', next);
+    try {
+      localStorage.setItem('lumina-theme', next ? 'dark' : 'light');
+    } catch (e) {}
+  };
+
+  useEffect(() => {
+    if (!estadoInicial) return;
+    const match = ESTADOS_ANIMO.find(
+      (e) => e.toLowerCase() === estadoInicial.toLowerCase()
+    );
+    if (match) {
+      setEstadoSeleccionado(match);
     }
+  }, [estadoInicial]);
 
+  async function cargarVersiculos() {
+    setCargandoDb(true);
+    const { data, error } = await supabase
+      .from('versiculos')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (!error && Array.isArray(data)) {
+      setVersiculosDb(data);
+    }
+    setCargandoDb(false);
+  }
+
+  useEffect(() => {
     cargarVersiculos();
   }, []);
 
@@ -44,16 +108,22 @@ export default function BuscadorPage() {
       (item.estado_animo || '').toLowerCase() ===
         estadoSeleccionado.toLowerCase();
 
+    const coincideVersion = coincideConVersion(item, versionBiblia);
+
     const termino = busqueda.trim().toLowerCase();
     const coincideTexto =
       !termino ||
       (item.titulo || '').toLowerCase().includes(termino) ||
       (item.descripcion || '').toLowerCase().includes(termino) ||
       (item.referencia || '').toLowerCase().includes(termino) ||
+      (item.subtitulo || '').toLowerCase().includes(termino) ||
+      (item.badge || '').toLowerCase().includes(termino) ||
       (item.estado_animo || '').toLowerCase().includes(termino);
 
-    return coincideEstado && coincideTexto;
+    return coincideEstado && coincideVersion && coincideTexto;
   });
+
+  const versionApiEfectiva = versionBiblia === 'todas' ? 'rvr1909' : versionBiblia;
 
   async function handleBuscarCitaBiblica(e) {
     e.preventDefault();
@@ -67,7 +137,7 @@ export default function BuscadorPage() {
 
     setCargandoBiblia(true);
     try {
-      const versiculo = await obtenerVersiculoMidvash(busqueda, versionBiblia);
+      const versiculo = await obtenerVersiculoMidvash(busqueda, versionApiEfectiva);
       setResultadoBiblia(versiculo);
     } catch (err) {
       setErrorBiblia(err.message || 'No se pudo consultar la cita.');
@@ -80,8 +150,48 @@ export default function BuscadorPage() {
     setErrorBiblia('');
     setResultadoBiblia(null);
     setCargandoBiblia(true);
+
     try {
-      const votd = await obtenerVersiculoDelDiaMidvash(versionBiblia);
+      const personalizado = versiculosDb.find((item) => {
+        const badgeTexto = (item.badge || '').toUpperCase();
+        const tituloTexto = (item.titulo || '').toUpperCase();
+        return (
+          badgeTexto.includes('VERSÍCULO DEL DÍA') ||
+          badgeTexto.includes('VERSICULO DEL DIA') ||
+          tituloTexto.includes('VERSÍCULO DEL DÍA') ||
+          tituloTexto.includes('VERSICULO DEL DIA')
+        );
+      });
+
+      if (personalizado) {
+        setResultadoBiblia({
+          titulo: personalizado.titulo || 'VERSÍCULO DEL DÍA',
+          subtitulo:
+            personalizado.subtitulo ||
+            personalizado.estado_animo ||
+            'REFLEXIÓN LUMINA',
+          badge: personalizado.badge || 'VERSÍCULO DEL DÍA',
+          descripcion: personalizado.descripcion || '',
+          referencia: personalizado.referencia || 'LUMINA · CATÁLOGO',
+        });
+        return;
+      }
+
+      const votd = await obtenerVersiculoDelDiaMidvash(versionApiEfectiva);
+      const textoLimpio = (votd?.descripcion || '').trim();
+
+      if (!textoLimpio) {
+        setResultadoBiblia({
+          titulo: votd?.titulo || 'VERSÍCULO DEL DÍA',
+          subtitulo: votd?.subtitulo || 'REFLEXIÓN DIARIA',
+          badge: 'VERSÍCULO DEL DÍA',
+          descripcion:
+            'El versículo diario se gestiona desde el panel de administración y no devolvió texto externo en esta consulta.',
+          referencia: votd?.referencia || `VERSIÓN ${versionApiEfectiva.toUpperCase()}`,
+        });
+        return;
+      }
+
       setResultadoBiblia(votd);
     } catch (err) {
       setErrorBiblia(err.message || 'No se pudo cargar el versículo del día.');
@@ -90,152 +200,132 @@ export default function BuscadorPage() {
     }
   }
 
+  const etiquetaVersionActual =
+    versionBiblia === 'todas'
+      ? 'Todas las versiones'
+      : MAPA_VERSIONES[versionBiblia]?.etiqueta || versionBiblia;
+
   return (
-    <main className="app-container" style={{ paddingBottom: '4rem' }}>
+    <main className="lumina-page-shell">
       <header className="app-header">
         <a href="/" className="header-brand-link">
           LUMINA
         </a>
-        <nav style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
-          <a href="/" className="nav-pill-btn">
-            <i className="fa-solid fa-house" /> Inicio
+        <a href="/" className="header-logo-badge" title="Inicio">
+          <span style={{ fontSize: '1.2rem', color: 'var(--gold-accent)' }}>
+            ✝
+          </span>
+        </a>
+        <nav className="header-nav-icons">
+          <a href="/" className="nav-icon-link" title="Inicio">
+            <i className="fa-solid fa-house"></i>
           </a>
-          <a href="/login" className="nav-pill-btn">
-            <i className="fa-solid fa-user-shield" /> Admin
+          <a href="/buscador" className="nav-icon-link active" title="Buscador">
+            <i className="fa-solid fa-magnifying-glass"></i>
+          </a>
+          <button
+            type="button"
+            onClick={toggleTheme}
+            className="nav-icon-btn"
+            title={darkMode ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'}
+          >
+            <i className={`fa-solid ${darkMode ? 'fa-sun' : 'fa-moon'}`}></i>
+          </button>
+          <a href="/login" className="nav-icon-link" title="Panel Admin">
+            <i className="fa-solid fa-user-shield"></i>
           </a>
         </nav>
       </header>
 
-      <section style={{ marginTop: '1.5rem' }}>
-        <h1 style={{ fontFamily: 'var(--font-display)', fontSize: '1.75rem' }}>
-          Buscador y Escrituras
-        </h1>
-        <p style={{ opacity: 0.85, marginTop: '0.25rem' }}>
-          Filtra pasajes por estado de ánimo o consulta citas bíblicas en
-          español.
-        </p>
+      <section className="section-shell">
+        <div className="lumina-panel">
+          <p className="welcome-subtitle">EXPLORACIÓN Y ESCRITURAS</p>
+          <h1 className="title-lumina" style={{ fontSize: '1.85rem' }}>
+            BUSCADOR LUMINA
+          </h1>
+          <p className="section-subcopy">
+            Filtra pasajes por estado de ánimo o versión, o busca por libro, autor o cita directa.
+          </p>
 
-        {/* Barra de búsqueda y filtro por estado de ánimo */}
-        <form
-          onSubmit={handleBuscarCitaBiblica}
-          style={{
-            display: 'flex',
-            flexWrap: 'wrap',
-            gap: '0.6rem',
-            marginTop: '1.25rem',
-          }}
-        >
-          <input
-            type="text"
-            value={busqueda}
-            onChange={(e) => setBusqueda(e.target.value)}
-            placeholder='Busca palabra clave o cita (ej. "Juan 3:16", "paz", "fe")...'
-            style={{
-              flex: '1 1 240px',
-              padding: '0.75rem 1rem',
-              borderRadius: '10px',
-              border: '1px solid rgba(212, 175, 55, 0.35)',
-              background: 'rgba(255, 255, 255, 0.06)',
-              color: 'inherit',
-            }}
-          />
+          <form onSubmit={handleBuscarCitaBiblica} className="search-toolbar">
+            <input
+              type="text"
+              className="lumina-input"
+              value={busqueda}
+              onChange={(e) => setBusqueda(e.target.value)}
+              placeholder='Busca por libro, autor o cita (ej. "Juan", "Salmos", "Juan 3:16")...'
+            />
 
-          <select
-            value={versionBiblia}
-            onChange={(e) => setVersionBiblia(e.target.value)}
-            aria-label="Versión de la Biblia"
-            style={{
-              padding: '0.75rem 0.9rem',
-              borderRadius: '10px',
-              border: '1px solid rgba(212, 175, 55, 0.35)',
-              background: '#18181b',
-              color: '#fff',
-            }}
-          >
-            <option value="rvr1909">Reina-Valera 1909</option>
-            <option value="rvg">Reina-Valera Gómez</option>
-            <option value="pdt">Palabra de Dios para ti</option>
-            <option value="onbv-es">Open Nueva Biblia Viva</option>
-            <option value="sev">Sagradas Escrituras 1569</option>
-          </select>
+            <select
+              className="lumina-select"
+              value={versionBiblia}
+              onChange={(e) => setVersionBiblia(e.target.value)}
+              aria-label="Versión de la Biblia"
+            >
+              <option value="todas">Todas las versiones</option>
+              <option value="rvr1909">Reina-Valera 1909</option>
+              <option value="rvg">Reina-Valera Gómez</option>
+              <option value="pdt">Palabra de Dios para ti</option>
+              <option value="onbv-es">Open Nueva Biblia Viva</option>
+              <option value="sev">Sagradas Escrituras 1569</option>
+            </select>
 
-          <button type="submit" className="action-gold-btn">
-            <i className="fa-solid fa-book-bible" /> Buscar cita
-          </button>
+            <button type="submit" className="btn-primary">
+              <i className="fa-solid fa-book-bible"></i> BUSCAR CITA
+            </button>
 
-          <button
-            type="button"
-            onClick={handleVersiculoDelDia}
-            className="nav-pill-btn"
-          >
-            <i className="fa-solid fa-sun" /> Versículo del día
-          </button>
-        </form>
+            <button
+              type="button"
+              onClick={handleVersiculoDelDia}
+              className="mood-chip mood-filter-chip"
+            >
+              <i className="fa-solid fa-sun"></i> Versículo del día
+            </button>
+          </form>
 
-        {/* Chips de estado de ánimo */}
-        <div
-          style={{
-            display: 'flex',
-            flexWrap: 'wrap',
-            gap: '0.5rem',
-            marginTop: '1rem',
-          }}
-        >
-          {ESTADOS_ANIMO.map((estado) => {
-            const activo = estadoSeleccionado === estado;
-            return (
-              <button
-                key={estado}
-                type="button"
-                onClick={() => setEstadoSeleccionado(estado)}
-                className="nav-pill-btn"
-                style={{
-                  borderColor: activo
-                    ? 'var(--gold-accent, #d4af37)'
-                    : undefined,
-                  fontWeight: activo ? 700 : 400,
-                }}
-              >
-                {estado}
-              </button>
-            );
-          })}
+          <div className="mood-filter-bar">
+            {ESTADOS_ANIMO.map((estado) => {
+              const activo = estadoSeleccionado === estado;
+              return (
+                <button
+                  key={estado}
+                  type="button"
+                  onClick={() => setEstadoSeleccionado(estado)}
+                  className={`mood-chip mood-filter-chip ${activo ? 'is-active' : ''}`}
+                >
+                  {estado}
+                </button>
+              );
+            })}
+          </div>
         </div>
       </section>
 
-      {/* Resultado directo de Midvash API */}
       {(cargandoBiblia || errorBiblia || resultadoBiblia) && (
-        <section style={{ marginTop: '1.75rem' }}>
-          {cargandoBiblia && <p>Consultando escritura...</p>}
-          {errorBiblia && (
-            <p style={{ color: '#f87171', fontSize: '0.95rem' }}>
-              {errorBiblia}
-            </p>
+        <section className="section-shell">
+          {cargandoBiblia && (
+            <p className="section-subcopy">Consultando escritura...</p>
           )}
+          {errorBiblia && <p className="feedback-error">{errorBiblia}</p>}
+
           {resultadoBiblia && (
-            <article
-              style={{
-                padding: '1.25rem',
-                borderRadius: '14px',
-                border: '1px solid rgba(212, 175, 55, 0.45)',
-                background: 'rgba(212, 175, 55, 0.08)',
-              }}
-            >
-              <small style={{ letterSpacing: '0.08em', opacity: 0.8 }}>
-                {resultadoBiblia.badge} · {resultadoBiblia.subtitulo}
-              </small>
-              <h2 style={{ marginTop: '0.35rem', fontSize: '1.3rem' }}>
+            <article className="lumina-panel" style={{ marginTop: '0.75rem' }}>
+              <div className="verse-card-meta">
+                <span>{resultadoBiblia.badge}</span>
+                <span>{resultadoBiblia.subtitulo}</span>
+              </div>
+              <h2
+                className="verse-card-title"
+                style={{ fontSize: '1.35rem', marginTop: '0.45rem' }}
+              >
                 {resultadoBiblia.titulo}
               </h2>
-              <p style={{ marginTop: '0.65rem', lineHeight: 1.6 }}>
+              <p className="verse-card-body" style={{ marginTop: '0.7rem' }}>
                 “{resultadoBiblia.descripcion}”
               </p>
               <p
-                style={{
-                  marginTop: '0.75rem',
-                  fontSize: '0.8rem',
-                  opacity: 0.75,
-                }}
+                className="section-subcopy"
+                style={{ fontSize: '0.82rem', marginBottom: 0 }}
               >
                 {resultadoBiblia.referencia}
               </p>
@@ -244,62 +334,66 @@ export default function BuscadorPage() {
         </section>
       )}
 
-      {/* Pasajes guardados en Supabase */}
-      <section style={{ marginTop: '2rem' }}>
-        <h2 style={{ fontSize: '1.2rem', marginBottom: '0.9rem' }}>
-          Pasajes en Lumina ({versiculosFiltrados.length})
-        </h2>
+      <section className="section-shell">
+        <div className="section-heading-row">
+          <div>
+            <h2 className="title-lumina" style={{ fontSize: '1.35rem', margin: 0 }}>
+              PASAJES DISPONIBLES ({versiculosFiltrados.length})
+            </h2>
+            <p className="section-subcopy" style={{ margin: '0.25rem 0 0' }}>
+              Estado: <strong>{estadoSeleccionado}</strong> · Versión:{' '}
+              <strong>{etiquetaVersionActual}</strong>
+            </p>
+          </div>
+        </div>
 
         {cargandoDb ? (
-          <p>Cargando pasajes desde la base de datos...</p>
-        ) : versiculosFiltrados.length === 0 ? (
-          <p style={{ opacity: 0.75 }}>
-            No hay pasajes que coincidan con ese filtro.
+          <p className="section-subcopy">
+            Cargando pasajes desde la base de datos...
           </p>
+        ) : versiculosFiltrados.length === 0 ? (
+          <div className="lumina-panel">
+            <p className="section-subcopy" style={{ margin: 0 }}>
+              No hay pasajes que coincidan con el filtro actual.
+            </p>
+          </div>
         ) : (
-          <div style={{ display: 'grid', gap: '1rem' }}>
+          <div className="verses-grid">
             {versiculosFiltrados.map((item) => (
-              <article
-                key={item.id}
-                style={{
-                  padding: '1.15rem',
-                  borderRadius: '14px',
-                  border: '1px solid rgba(255, 255, 255, 0.12)',
-                  background: 'rgba(255, 255, 255, 0.03)',
-                }}
-              >
-                <div
-                  style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    gap: '0.5rem',
-                    fontSize: '0.8rem',
-                    opacity: 0.8,
-                  }}
-                >
-                  <span>{item.badge || 'PASAJE'}</span>
-                  <span>Estado: {item.estado_animo || 'Paz'}</span>
+              <article key={item.id} className="verse-card">
+                <div>
+                  <div className="verse-card-meta">
+                    <span>{item.badge || 'PASAJE'}</span>
+                    <span>{item.estado_animo || 'Paz'}</span>
+                  </div>
+                  <h3 className="verse-card-title">{item.titulo}</h3>
+                  <p className="verse-card-body" style={{ marginTop: '0.6rem' }}>
+                    {item.descripcion}
+                  </p>
                 </div>
-                <h3 style={{ marginTop: '0.35rem', fontSize: '1.15rem' }}>
-                  {item.titulo}
-                </h3>
-                <p style={{ marginTop: '0.5rem', lineHeight: 1.55 }}>
-                  {item.descripcion}
-                </p>
-                <p
-                  style={{
-                    marginTop: '0.6rem',
-                    fontSize: '0.82rem',
-                    opacity: 0.75,
-                  }}
-                >
-                  {item.referencia}
-                </p>
+
+                <div className="verse-card-footer">
+                  <span>{item.referencia}</span>
+                </div>
               </article>
             ))}
           </div>
         )}
       </section>
     </main>
+  );
+}
+
+export default function BuscadorPage() {
+  return (
+    <Suspense
+      fallback={
+        <main className="lumina-page-shell">
+          <p>Cargando buscador...</p>
+        </main>
+      }
+    >
+      <BuscadorContenido />
+    </Suspense>
   );
 }

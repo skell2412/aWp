@@ -1,0 +1,16 @@
+{
+  "name": "Lumina - Espacio de Paz y Esperanza",
+  "short_name": "Lumina",
+  "description": "PWA de pasajes bíblicos, estados de ánimo y reflexión diaria.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f7f4ed",
+  "theme_color": "#c5a059",
+  "icons": [
+    {
+      "src": "/favicon.ico",
+      "sizes": "any",
+      "type": "image/x-icon"
+    }
+  ]
+}

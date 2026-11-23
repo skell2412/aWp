@@ -2,35 +2,108 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { supabase } from '@/lib/supabase';
+import { supabase } from '@/app/lib/supabase';
 
 const ESTADOS_ANIMO = ['Paz', 'Fortaleza', 'Consuelo', 'Gratitud'];
 
+const OPCIONES_VERSION_SELECT = [
+  { label: 'Reina-Valera', valor: 'REINA-VALERA' },
+  { label: 'Reina-Valera Gómez', valor: 'REINA-VALERA GÓMEZ' },
+  { label: 'Palabra de Dios para ti', valor: 'PALABRA DE DIOS PARA TI' },
+  { label: 'Nueva Biblia Viva', valor: 'NUEVA BIBLIA VIVA' },
+  { label: 'Sagradas Escrituras', valor: 'SAGRADAS ESCRITURAS' },
+  { label: 'Versículo del día', valor: 'VERSÍCULO DEL DÍA' },
+];
+
+const MAPA_VERSIONES = {
+  todas: {
+    etiqueta: 'Todas las versiones',
+    claves: [],
+  },
+  rvr1909: {
+    etiqueta: 'Reina-Valera 1909',
+    claves: ['RVR1909', 'REINA-VALERA', 'REINA VALERA'],
+  },
+  rvg: {
+    etiqueta: 'Reina-Valera Gómez',
+    claves: ['RVG', 'REINA-VALERA GÓMEZ', 'REINA VALERA GOMEZ', 'GÓMEZ', 'GOMEZ'],
+  },
+  pdt: {
+    etiqueta: 'Palabra de Dios para ti',
+    claves: ['PDT', 'PALABRA DE DIOS PARA TI'],
+  },
+  'onbv-es': {
+    etiqueta: 'Open Nueva Biblia Viva',
+    claves: ['ONBV-ES', 'NUEVA BIBLIA VIVA'],
+  },
+  sev: {
+    etiqueta: 'Sagradas Escrituras 1569',
+    claves: ['SEV', 'SAGRADAS ESCRITURAS'],
+  },
+};
+
+function coincideConVersion(item, codigoVersion) {
+  if (!codigoVersion || codigoVersion === 'todas') return true;
+  const info = MAPA_VERSIONES[codigoVersion];
+  if (!info || !info.claves.length) return true;
+
+  const textoComparar = `${item.badge || ''} ${item.subtitulo || ''} ${item.referencia || ''}`.toUpperCase();
+  return info.claves.some((clave) => textoComparar.includes(clave.toUpperCase()));
+}
+
+function limpiarAutor(valorSubtitulo) {
+  if (!valorSubtitulo) return '';
+  return valorSubtitulo.split('·')[0].trim();
+}
+
 const FORMULARIO_VACIO = {
   titulo: '',
-  subtitulo: 'ESPACIO DE PAZ',
-  badge: 'PASAJE DESTACADO',
+  subtitulo: 'PABLO',
+  badge: 'REINA-VALERA',
   descripcion: '',
   referencia: '',
   estado_animo: 'Paz',
   imagen_url:
     'https://images.pexels.com/photos/1612861/pexels-photo-1612861.jpeg?auto=compress&cs=tinysrgb&w=800',
-  destacado: true,
+  destacado: false,
 };
 
 export default function AdminPage() {
   const router = useRouter();
+  const [darkMode, setDarkMode] = useState(false);
   const [usuario, setUsuario] = useState(null);
   const [autorizado, setAutorizado] = useState(false);
 
   const [versiculos, setVersiculos] = useState([]);
   const [cargandoLista, setCargandoLista] = useState(true);
 
+  const [filtroAdmin, setFiltroAdmin] = useState('Todos');
+  const [versionFiltro, setVersionFiltro] = useState('todas');
+  const [busquedaAdmin, setBusquedaAdmin] = useState('');
+
   const [form, setForm] = useState(FORMULARIO_VACIO);
   const [editandoId, setEditandoId] = useState(null);
   const [guardando, setGuardando] = useState(false);
   const [mensaje, setMensaje] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
+
+  useEffect(() => {
+    const saved = localStorage.getItem('lumina-theme');
+    const isDark = saved
+      ? saved === 'dark'
+      : document.body.classList.contains('dark-mode');
+    setDarkMode(isDark);
+    document.body.classList.toggle('dark-mode', isDark);
+  }, []);
+
+  const toggleTheme = () => {
+    const next = !darkMode;
+    setDarkMode(next);
+    document.body.classList.toggle('dark-mode', next);
+    try {
+      localStorage.setItem('lumina-theme', next ? 'dark' : 'light');
+    } catch (e) {}
+  };
 
   async function cargarVersiculos() {
     setCargandoLista(true);
@@ -93,10 +166,15 @@ export default function AdminPage() {
     setEditandoId(item.id);
     setErrorMsg('');
     setMensaje('');
+    const badgeActual = item.badge || 'REINA-VALERA';
+    const coincideOpcion = OPCIONES_VERSION_SELECT.some(
+      (op) => op.valor.toUpperCase() === badgeActual.toUpperCase()
+    );
+
     setForm({
       titulo: item.titulo || '',
-      subtitulo: item.subtitulo || 'ESPACIO DE PAZ',
-      badge: item.badge || 'PASAJE DESTACADO',
+      subtitulo: limpiarAutor(item.subtitulo),
+      badge: coincideOpcion ? badgeActual.toUpperCase() : badgeActual,
       descripcion: item.descripcion || '',
       referencia: item.referencia || '',
       estado_animo: item.estado_animo || 'Paz',
@@ -120,16 +198,18 @@ export default function AdminPage() {
     setMensaje('');
 
     if (!form.titulo.trim() || !form.descripcion.trim() || !form.referencia.trim()) {
-      setErrorMsg('Título, descripción/versículo y referencia son obligatorios.');
+      setErrorMsg('Pasaje/Título, explicación breve y libro/cita son obligatorios.');
       return;
     }
 
     setGuardando(true);
 
+    const autorLimpio = limpiarAutor(form.subtitulo) || 'AUTOR BÍBLICO';
+
     const payload = {
       titulo: form.titulo.trim(),
-      subtitulo: form.subtitulo.trim() || 'ESPACIO DE PAZ',
-      badge: form.badge.trim() || 'PASAJE DESTACADO',
+      subtitulo: autorLimpio.toUpperCase(),
+      badge: form.badge.trim() || 'REINA-VALERA',
       descripcion: form.descripcion.trim(),
       referencia: form.referencia.trim(),
       estado_animo: form.estado_animo,
@@ -151,7 +231,7 @@ export default function AdminPage() {
       } else {
         const { error } = await supabase.from('versiculos').insert([payload]);
         if (error) throw error;
-        setMensaje('Nuevo versículo añadido a Lumina.');
+        setMensaje('Nuevo versículo guardado en Lumina.');
       }
 
       setForm(FORMULARIO_VACIO);
@@ -162,6 +242,29 @@ export default function AdminPage() {
     } finally {
       setGuardando(false);
     }
+  }
+
+  async function handleAlternarDestacado(item) {
+    setErrorMsg('');
+    setMensaje('');
+    const nuevoEstado = !item.destacado;
+
+    const { error } = await supabase
+      .from('versiculos')
+      .update({ destacado: nuevoEstado })
+      .eq('id', item.id);
+
+    if (error) {
+      setErrorMsg(error.message || 'No se pudo actualizar el estado en portada.');
+      return;
+    }
+
+    setMensaje(
+      nuevoEstado
+        ? `"${item.titulo}" ahora aparece en la página de inicio.`
+        : `"${item.titulo}" se quitó de la página de inicio (sigue guardado en tu catálogo).`
+    );
+    await cargarVersiculos();
   }
 
   async function handleEliminar(id) {
@@ -178,7 +281,7 @@ export default function AdminPage() {
     if (editandoId === id) {
       cancelarEdicion();
     }
-    setMensaje('Versículo eliminado.');
+    setMensaje('Versículo eliminado permanentemente.');
     await cargarVersiculos();
   }
 
@@ -187,19 +290,52 @@ export default function AdminPage() {
     router.replace('/login');
   }
 
+  const destacadosEnInicio = versiculos.filter((item) => Boolean(item.destacado));
+
+  const versiculosFiltrados = versiculos.filter((item) => {
+    const coincideFiltro =
+      filtroAdmin === 'Todos'
+        ? true
+        : filtroAdmin === 'Destacados'
+        ? Boolean(item.destacado)
+        : (item.estado_animo || '').toLowerCase() === filtroAdmin.toLowerCase();
+
+    const coincideVersion = coincideConVersion(item, versionFiltro);
+
+    const termino = busquedaAdmin.trim().toLowerCase();
+    const coincideTexto =
+      !termino ||
+      (item.titulo || '').toLowerCase().includes(termino) ||
+      (item.referencia || '').toLowerCase().includes(termino) ||
+      (item.descripcion || '').toLowerCase().includes(termino) ||
+      (item.badge || '').toLowerCase().includes(termino) ||
+      (item.subtitulo || '').toLowerCase().includes(termino);
+
+    return coincideFiltro && coincideVersion && coincideTexto;
+  });
+
+  const tieneValorPersonalizado = !OPCIONES_VERSION_SELECT.some(
+    (op) => op.valor.toUpperCase() === (form.badge || '').toUpperCase()
+  );
+
   if (!autorizado) {
     return (
-      <main className="app-container" style={{ paddingTop: '3rem' }}>
-        <p>Verificando sesión de administrador...</p>
+      <main className="lumina-page-shell" style={{ paddingTop: '3rem' }}>
+        <p className="section-subcopy">Verificando sesión de administrador...</p>
       </main>
     );
   }
 
   return (
-    <main className="app-container" style={{ paddingBottom: '4rem' }}>
+    <main className="lumina-page-shell">
       <header className="app-header">
         <a href="/" className="header-brand-link">
           LUMINA
+        </a>
+        <a href="/" className="header-logo-badge" title="Inicio">
+          <span style={{ fontSize: '1.2rem', color: 'var(--gold-accent)' }}>
+            ✝
+          </span>
         </a>
         <nav className="header-nav-icons">
           <a href="/" className="nav-icon-link" title="Inicio">
@@ -209,6 +345,15 @@ export default function AdminPage() {
             <i className="fa-solid fa-magnifying-glass"></i>
           </a>
           <button
+            type="button"
+            onClick={toggleTheme}
+            className="nav-icon-btn"
+            title={darkMode ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'}
+          >
+            <i className={`fa-solid ${darkMode ? 'fa-sun' : 'fa-moon'}`}></i>
+          </button>
+          <button
+            type="button"
             onClick={handleCerrarSesion}
             className="nav-icon-btn"
             title="Cerrar sesión"
@@ -218,314 +363,349 @@ export default function AdminPage() {
         </nav>
       </header>
 
-      <section style={{ marginTop: '1.5rem' }}>
-        <p className="welcome-subtitle">
-          SESIÓN ACTIVA: {usuario?.email || 'ADMINISTRADOR'}
-        </p>
-        <h1 className="title-lumina" style={{ fontSize: '1.8rem' }}>
-          PANEL DE ADMINISTRACIÓN
-        </h1>
-        <p style={{ opacity: 0.85, marginTop: '0.25rem' }}>
-          Añade, modifica o elimina versículos y decide cuáles aparecen en el inicio.
-        </p>
+      <section className="section-shell">
+        <div className="lumina-panel">
+          <p className="welcome-subtitle">
+            SESIÓN ACTIVA: {usuario?.email || 'ADMINISTRADOR'}
+          </p>
+          <h1 className="title-lumina" style={{ fontSize: '1.85rem' }}>
+            PANEL DE ADMINISTRACIÓN
+          </h1>
+          <p className="section-subcopy">
+            Crea, edita o elimina versículos y controla cuáles aparecen destacados en la portada.
+          </p>
 
-        {/* Formulario Crear / Editar */}
-        <form
-          onSubmit={handleGuardar}
-          style={{
-            marginTop: '1.5rem',
-            padding: '1.5rem',
-            borderRadius: '14px',
-            border: '1px solid rgba(212, 175, 55, 0.35)',
-            background: 'rgba(255, 255, 255, 0.03)',
-            display: 'grid',
-            gap: '0.9rem',
-          }}
-        >
-          <h2 style={{ fontSize: '1.15rem', margin: 0 }}>
-            {editandoId ? 'Editar versículo' : 'Añadir nuevo versículo'}
-          </h2>
+          <form onSubmit={handleGuardar} className="section-shell">
+            <h2
+              className="verse-card-title"
+              style={{ fontSize: '1.15rem', marginBottom: '1.1rem' }}
+            >
+              {editandoId ? 'Editar versículo seleccionado' : 'Añadir nuevo versículo'}
+            </h2>
 
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
-              gap: '0.8rem',
-            }}
-          >
-            <div>
-              <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.3rem' }}>
-                Título *
-              </label>
-              <input
-                type="text"
-                name="titulo"
-                value={form.titulo}
+            <div className="admin-form-grid">
+              <div className="admin-field">
+                <label htmlFor="titulo">Pasaje / Título *</label>
+                <input
+                  id="titulo"
+                  type="text"
+                  name="titulo"
+                  className="lumina-input"
+                  value={form.titulo}
+                  onChange={handleChange}
+                  placeholder="Ej. Ten paz en medio de la prueba..."
+                  required
+                />
+              </div>
+
+              <div className="admin-field">
+                <label htmlFor="subtitulo">Autor</label>
+                <input
+                  id="subtitulo"
+                  type="text"
+                  name="subtitulo"
+                  className="lumina-input"
+                  value={form.subtitulo}
+                  onChange={handleChange}
+                  placeholder="Ej. PABLO, DAVID, JUAN..."
+                />
+              </div>
+
+              <div className="admin-field">
+                <label htmlFor="estado_animo">Estado de ánimo</label>
+                <select
+                  id="estado_animo"
+                  name="estado_animo"
+                  className="lumina-select"
+                  value={form.estado_animo}
+                  onChange={handleChange}
+                >
+                  {ESTADOS_ANIMO.map((estado) => (
+                    <option key={estado} value={estado}>
+                      {estado}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="admin-field">
+                <label htmlFor="badge">Versión / Etiqueta (Badge)</label>
+                <select
+                  id="badge"
+                  name="badge"
+                  className="lumina-select"
+                  value={form.badge}
+                  onChange={handleChange}
+                >
+                  {tieneValorPersonalizado && form.badge && (
+                    <option value={form.badge}>{form.badge}</option>
+                  )}
+                  {OPCIONES_VERSION_SELECT.map((opcion) => (
+                    <option key={opcion.valor} value={opcion.valor}>
+                      {opcion.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="admin-field" style={{ marginTop: '1.1rem' }}>
+              <label htmlFor="descripcion">Explicación breve del pasaje *</label>
+              <textarea
+                id="descripcion"
+                name="descripcion"
+                className="lumina-textarea"
+                value={form.descripcion}
                 onChange={handleChange}
-                placeholder="Ej. PAZ EN LA TORMENTA"
+                placeholder="Explica brevemente lo que significa o aporta este pasaje..."
                 required
-                style={{
-                  width: '100%',
-                  padding: '0.65rem 0.8rem',
-                  borderRadius: '8px',
-                  border: '1px solid rgba(255,255,255,0.18)',
-                  background: 'rgba(255,255,255,0.05)',
-                  color: 'inherit',
-                }}
               />
             </div>
 
+            <div className="admin-form-grid" style={{ marginTop: '1.1rem' }}>
+              <div className="admin-field">
+                <label htmlFor="referencia">Libro y cita *</label>
+                <input
+                  id="referencia"
+                  type="text"
+                  name="referencia"
+                  className="lumina-input"
+                  value={form.referencia}
+                  onChange={handleChange}
+                  placeholder="Ej. JUAN 14:27"
+                  required
+                />
+              </div>
+
+              <div className="admin-field">
+                <label htmlFor="imagen_url">URL de imagen</label>
+                <input
+                  id="imagen_url"
+                  type="text"
+                  name="imagen_url"
+                  className="lumina-input"
+                  value={form.imagen_url}
+                  onChange={handleChange}
+                  placeholder="https://..."
+                />
+              </div>
+            </div>
+
+            <label
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.6rem',
+                fontSize: '0.92rem',
+                marginTop: '1.15rem',
+                cursor: 'pointer',
+              }}
+            >
+              <input
+                type="checkbox"
+                name="destacado"
+                checked={form.destacado}
+                onChange={handleChange}
+              />
+              Mostrar como tarjeta destacada en la página de inicio
+            </label>
+
+            {errorMsg && <p className="feedback-error">{errorMsg}</p>}
+            {mensaje && <p className="feedback-ok">{mensaje}</p>}
+
+            <div className="admin-actions-row">
+              <button type="submit" disabled={guardando} className="btn-primary">
+                {guardando
+                  ? 'GUARDANDO...'
+                  : editandoId
+                  ? 'GUARDAR CAMBIOS'
+                  : 'AÑADIR VERSÍCULO'}
+              </button>
+
+              {editandoId && (
+                <button
+                  type="button"
+                  onClick={cancelarEdicion}
+                  className="mood-chip mood-filter-chip"
+                >
+                  Cancelar edición
+                </button>
+              )}
+            </div>
+          </form>
+        </div>
+
+        {/* SECCIÓN EXCLUSIVA: DESTACADOS ACTIVOS EN PORTADA */}
+        <div className="section-shell">
+          <div className="lumina-panel">
+            <div className="section-heading-row" style={{ marginBottom: '0.9rem' }}>
+              <div>
+                <h2 className="title-lumina" style={{ fontSize: '1.35rem', margin: 0 }}>
+                  DESTACADOS EN PORTADA ({destacadosEnInicio.length})
+                </h2>
+                <p className="section-subcopy" style={{ margin: '0.25rem 0 0' }}>
+                  Pasajes activos en la página principal. Puedes quitarlos sin eliminarlos de tu catálogo.
+                </p>
+              </div>
+            </div>
+
+            {cargandoLista ? (
+              <p className="section-subcopy">Cargando destacados...</p>
+            ) : destacadosEnInicio.length === 0 ? (
+              <p className="section-subcopy" style={{ margin: 0 }}>
+                No hay ningún pasaje marcado en portada.
+              </p>
+            ) : (
+              <div className="verses-grid">
+                {destacadosEnInicio.map((item) => (
+                  <article key={item.id} className="verse-card">
+                    <div>
+                      <div className="verse-card-meta">
+                        <span>{item.badge || 'REINA-VALERA'}</span>
+                        <span>{item.estado_animo || 'Paz'}</span>
+                      </div>
+                      <h3 className="verse-card-title">{item.titulo}</h3>
+                      <p className="verse-card-body" style={{ marginTop: '0.6rem' }}>
+                        {item.descripcion}
+                      </p>
+                    </div>
+
+                    <div>
+                      <div className="verse-card-footer">
+                        <span>{item.referencia}</span>
+                        <span>{limpiarAutor(item.subtitulo)}</span>
+                      </div>
+                      <div className="admin-actions-row" style={{ marginTop: '0.85rem' }}>
+                        <button
+                          type="button"
+                          onClick={() => handleAlternarDestacado(item)}
+                          className="mood-chip mood-filter-chip"
+                        >
+                          <i className="fa-solid fa-eye-slash"></i> Quitar de inicio
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => empezarEdicion(item)}
+                          className="mood-chip mood-filter-chip"
+                        >
+                          <i className="fa-solid fa-pen"></i> Editar
+                        </button>
+                      </div>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* CATÁLOGO COMPLETO CON BUSCADOR Y FILTRO POR VERSIÓN + ESTADO */}
+        <div className="section-shell">
+          <div className="section-heading-row">
             <div>
-              <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.3rem' }}>
-                Subtítulo
-              </label>
+              <h2 className="title-lumina" style={{ fontSize: '1.35rem', margin: 0 }}>
+                CATÁLOGO COMPLETO ({versiculosFiltrados.length})
+              </h2>
+              <p className="section-subcopy" style={{ margin: '0.25rem 0 0' }}>
+                Filtra por versión bíblica, estado de ánimo o busca por cita, autor o palabra clave.
+              </p>
+            </div>
+          </div>
+
+          <div className="lumina-panel" style={{ marginBottom: '1.25rem' }}>
+            <div className="admin-form-grid">
               <input
                 type="text"
-                name="subtitulo"
-                value={form.subtitulo}
-                onChange={handleChange}
-                placeholder="Ej. CALMA PARA TU CORAZÓN"
-                style={{
-                  width: '100%',
-                  padding: '0.65rem 0.8rem',
-                  borderRadius: '8px',
-                  border: '1px solid rgba(255,255,255,0.18)',
-                  background: 'rgba(255,255,255,0.05)',
-                  color: 'inherit',
-                }}
+                className="lumina-input"
+                value={busquedaAdmin}
+                onChange={(e) => setBusquedaAdmin(e.target.value)}
+                placeholder="Buscar por cita, autor, versión o palabra clave..."
               />
-            </div>
 
-            <div>
-              <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.3rem' }}>
-                Estado de ánimo
-              </label>
               <select
-                name="estado_animo"
-                value={form.estado_animo}
-                onChange={handleChange}
-                style={{
-                  width: '100%',
-                  padding: '0.65rem 0.8rem',
-                  borderRadius: '8px',
-                  border: '1px solid rgba(255,255,255,0.18)',
-                  background: '#18181b',
-                  color: '#fff',
-                }}
+                className="lumina-select"
+                value={versionFiltro}
+                onChange={(e) => setVersionFiltro(e.target.value)}
+                aria-label="Filtrar catálogo por versión"
               >
-                {ESTADOS_ANIMO.map((estado) => (
-                  <option key={estado} value={estado}>
-                    {estado}
-                  </option>
-                ))}
+                <option value="todas">Todas las versiones</option>
+                <option value="rvr1909">Reina-Valera 1909</option>
+                <option value="rvg">Reina-Valera Gómez</option>
+                <option value="pdt">Palabra de Dios para ti</option>
+                <option value="onbv-es">Open Nueva Biblia Viva</option>
+                <option value="sev">Sagradas Escrituras 1569</option>
               </select>
             </div>
 
-            <div>
-              <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.3rem' }}>
-                Etiqueta (Badge)
-              </label>
-              <input
-                type="text"
-                name="badge"
-                value={form.badge}
-                onChange={handleChange}
-                placeholder="Ej. PASAJE DESTACADO"
-                style={{
-                  width: '100%',
-                  padding: '0.65rem 0.8rem',
-                  borderRadius: '8px',
-                  border: '1px solid rgba(255,255,255,0.18)',
-                  background: 'rgba(255,255,255,0.05)',
-                  color: 'inherit',
-                }}
-              />
+            <div className="mood-filter-bar">
+              {['Todos', 'Destacados', ...ESTADOS_ANIMO].map((filtro) => {
+                const activo = filtroAdmin === filtro;
+                return (
+                  <button
+                    key={filtro}
+                    type="button"
+                    onClick={() => setFiltroAdmin(filtro)}
+                    className={`mood-chip mood-filter-chip ${activo ? 'is-active' : ''}`}
+                  >
+                    {filtro}
+                  </button>
+                );
+              })}
             </div>
           </div>
-
-          <div>
-            <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.3rem' }}>
-              Texto del versículo o descripción *
-            </label>
-            <textarea
-              name="descripcion"
-              rows={3}
-              value={form.descripcion}
-              onChange={handleChange}
-              placeholder="Escribe aquí el versículo o mensaje..."
-              required
-              style={{
-                width: '100%',
-                padding: '0.65rem 0.8rem',
-                borderRadius: '8px',
-                border: '1px solid rgba(255,255,255,0.18)',
-                background: 'rgba(255,255,255,0.05)',
-                color: 'inherit',
-              }}
-            />
-          </div>
-
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
-              gap: '0.8rem',
-            }}
-          >
-            <div>
-              <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.3rem' }}>
-                Referencia / Pie de tarjeta *
-              </label>
-              <input
-                type="text"
-                name="referencia"
-                value={form.referencia}
-                onChange={handleChange}
-                placeholder="Ej. JUAN 14:27 · RVR1909"
-                required
-                style={{
-                  width: '100%',
-                  padding: '0.65rem 0.8rem',
-                  borderRadius: '8px',
-                  border: '1px solid rgba(255,255,255,0.18)',
-                  background: 'rgba(255,255,255,0.05)',
-                  color: 'inherit',
-                }}
-              />
-            </div>
-
-            <div>
-              <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '0.3rem' }}>
-                URL de imagen
-              </label>
-              <input
-                type="text"
-                name="imagen_url"
-                value={form.imagen_url}
-                onChange={handleChange}
-                placeholder="https://..."
-                style={{
-                  width: '100%',
-                  padding: '0.65rem 0.8rem',
-                  borderRadius: '8px',
-                  border: '1px solid rgba(255,255,255,0.18)',
-                  background: 'rgba(255,255,255,0.05)',
-                  color: 'inherit',
-                }}
-              />
-            </div>
-          </div>
-
-          <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.9rem' }}>
-            <input
-              type="checkbox"
-              name="destacado"
-              checked={form.destacado}
-              onChange={handleChange}
-            />
-            Mostrar como tarjeta destacada en la página de inicio
-          </label>
-
-          {errorMsg && (
-            <p style={{ color: '#f87171', fontSize: '0.9rem', margin: 0 }}>
-              {errorMsg}
-            </p>
-          )}
-          {mensaje && (
-            <p style={{ color: '#4ade80', fontSize: '0.9rem', margin: 0 }}>
-              {mensaje}
-            </p>
-          )}
-
-          <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
-            <button type="submit" disabled={guardando} className="btn-primary">
-              {guardando
-                ? 'Guardando...'
-                : editandoId
-                ? 'GUARDAR CAMBIOS'
-                : 'AÑADIR VERSÍCULO'}
-            </button>
-
-            {editandoId && (
-              <button
-                type="button"
-                onClick={cancelarEdicion}
-                className="mood-chip"
-                style={{ cursor: 'pointer' }}
-              >
-                Cancelar edición
-              </button>
-            )}
-          </div>
-        </form>
-
-        {/* Lista de versículos existentes */}
-        <div style={{ marginTop: '2.2rem' }}>
-          <h2 style={{ fontSize: '1.2rem', marginBottom: '1rem' }}>
-            Versículos registrados ({versiculos.length})
-          </h2>
 
           {cargandoLista ? (
-            <p>Cargando versículos...</p>
-          ) : versiculos.length === 0 ? (
-            <p style={{ opacity: 0.75 }}>Aún no hay versículos registrados.</p>
+            <p className="section-subcopy">Cargando versículos...</p>
+          ) : versiculosFiltrados.length === 0 ? (
+            <div className="lumina-panel">
+              <p className="section-subcopy" style={{ margin: 0 }}>
+                No hay versículos que coincidan con ese filtro.
+              </p>
+            </div>
           ) : (
-            <div style={{ display: 'grid', gap: '0.9rem' }}>
-              {versiculos.map((item) => (
-                <article
-                  key={item.id}
-                  style={{
-                    padding: '1.1rem',
-                    borderRadius: '12px',
-                    border: '1px solid rgba(255,255,255,0.14)',
-                    background: 'rgba(255,255,255,0.03)',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: '0.45rem',
-                  }}
-                >
-                  <div
-                    style={{
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      gap: '0.5rem',
-                      fontSize: '0.8rem',
-                      opacity: 0.8,
-                      flexWrap: 'wrap',
-                    }}
-                  >
-                    <span>
-                      Estado: <strong>{item.estado_animo}</strong> ·{' '}
-                      {item.destacado ? '★ Destacado en inicio' : 'Solo buscador'}
-                    </span>
-                    <span>{item.referencia}</span>
+            <div className="verses-grid">
+              {versiculosFiltrados.map((item) => (
+                <article key={item.id} className="verse-card">
+                  <div>
+                    <div className="verse-card-meta">
+                      <span>{item.badge || 'REINA-VALERA'}</span>
+                      <span>{item.estado_animo || 'Paz'}</span>
+                    </div>
+                    <h3 className="verse-card-title">{item.titulo}</h3>
+                    <p className="verse-card-body" style={{ marginTop: '0.6rem' }}>
+                      {item.descripcion}
+                    </p>
                   </div>
 
-                  <h3 style={{ margin: 0, fontSize: '1.1rem' }}>{item.titulo}</h3>
-                  <p style={{ margin: 0, lineHeight: 1.5 }}>{item.descripcion}</p>
-
-                  <div style={{ display: 'flex', gap: '0.6rem', marginTop: '0.4rem' }}>
-                    <button
-                      type="button"
-                      onClick={() => empezarEdicion(item)}
-                      className="mood-chip"
-                      style={{ cursor: 'pointer' }}
-                    >
-                      <i className="fa-solid fa-pen" /> Editar
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => handleEliminar(item.id)}
-                      className="mood-chip"
-                      style={{
-                        cursor: 'pointer',
-                        borderColor: 'rgba(248, 113, 113, 0.5)',
-                        color: '#f87171',
-                      }}
-                    >
-                      <i className="fa-solid fa-trash" /> Eliminar
-                    </button>
+                  <div>
+                    <div className="verse-card-footer">
+                      <span>{item.referencia}</span>
+                      <span>{limpiarAutor(item.subtitulo)}</span>
+                    </div>
+                    <div className="admin-actions-row" style={{ marginTop: '0.85rem' }}>
+                      <button
+                        type="button"
+                        onClick={() => handleAlternarDestacado(item)}
+                        className={`mood-chip mood-filter-chip ${item.destacado ? 'is-active' : ''}`}
+                      >
+                        <i className={`fa-solid ${item.destacado ? 'fa-star' : 'fa-arrow-up-from-bracket'}`}></i>{' '}
+                        {item.destacado ? 'Quitar de inicio' : 'Destacar en inicio'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => empezarEdicion(item)}
+                        className="mood-chip mood-filter-chip"
+                      >
+                        <i className="fa-solid fa-pen"></i> Editar
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleEliminar(item.id)}
+                        className="mood-chip btn-danger-outline"
+                      >
+                        <i className="fa-solid fa-trash"></i> Eliminar
+                      </button>
+                    </div>
                   </div>
                 </article>
               ))}
@@ -536,3 +716,4 @@ export default function AdminPage() {
     </main>
   );
 }
+

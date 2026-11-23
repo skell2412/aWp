@@ -1,35 +1,36 @@
 import { Cinzel, Plus_Jakarta_Sans } from 'next/font/google';
 import './globals.css';
 
-const cinzel = Cinzel({
-  subsets: ['latin'],
-  variable: '--font-cinzel'
-});
-
-const plusJakarta = Plus_Jakarta_Sans({
-  subsets: ['latin'],
-  variable: '--font-jakarta'
-});
-
 export const metadata = {
   title: 'Lumina - Espacio de Paz y Esperanza',
-  description: 'Consulta escrituras y cartas bíblicas según tu estado de ánimo.',
+  description: 'PWA de pasajes bíblicos, estados de ánimo y reflexión diaria.',
   manifest: '/manifest.json',
 };
 
+const themeInitScript = `
+  try {
+    var saved = localStorage.getItem('lumina-theme');
+    if (saved === 'dark') {
+      document.body.classList.add('dark-mode');
+    } else if (saved === 'light') {
+      document.body.classList.remove('dark-mode');
+    }
+  } catch (e) {}
+`;
+
 export default function RootLayout({ children }) {
   return (
-    <html lang="es" className={`${cinzel.variable} ${plusJakarta.variable}`}>
+    <html lang="es">
       <head>
-        {/* Importamos FontAwesome para que carguen los iconos correctamente */}
         <link
           rel="stylesheet"
-          href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
+          href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
         />
       </head>
-      <body>
-        {children}
-      </body>
+<body suppressHydrationWarning>
+  <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
+  {children}
+</body>
     </html>
   );
 }
