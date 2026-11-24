@@ -33,7 +33,7 @@ function getYouTubeEmbedUrl(url) {
     /(?:youtu\.be\/|youtube\.com\/(?:watch\?.*v=|embed\/|v\/|shorts\/|live\/))([a-zA-Z0-9_-]{11})/
   );
   if (!match || !match[1]) return '';
-  return `https://www.youtube.com/embed/${match[1]}?rel=0&modestbranding=1`;
+  return `https://www.youtube-nocookie.com/embed/${match[1]}?rel=0&modestbranding=1`;
 }
 
 function BuscadorContenido() {
@@ -375,6 +375,7 @@ function BuscadorContenido() {
           <div className="verses-grid">
             {videosDb.map((video) => {
               const embedUrl = getYouTubeEmbedUrl(video.url);
+              if (!embedUrl) return null;
 
               return (
                 <article
@@ -386,43 +387,24 @@ function BuscadorContenido() {
                     style={{
                       position: 'relative',
                       width: '100%',
-                      paddingTop: '56.25%',
+                      aspectRatio: '16 / 9',
+                      flexShrink: 0,
                       backgroundColor: '#0e0f14',
                     }}
                   >
-                    {embedUrl ? (
-                      <iframe
-                        src={embedUrl}
-                        title={video.titulo || 'Video de Lumina'}
-                        referrerPolicy="strict-origin-when-cross-origin"
-                        style={{
-                          position: 'absolute',
-                          top: 0,
-                          left: 0,
-                          width: '100%',
-                          height: '100%',
-                          border: 'none',
-                        }}
-                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                        allowFullScreen
-                      ></iframe>
-                    ) : (
-                      <div
-                        style={{
-                          position: 'absolute',
-                          inset: 0,
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          padding: '1rem',
-                          textAlign: 'center',
-                          fontSize: '0.85rem',
-                          opacity: 0.75,
-                        }}
-                      >
-                        Enlace no compatible con reproductor integrado
-                      </div>
-                    )}
+                    <iframe
+                      src={embedUrl}
+                      title={video.titulo || 'Video de Lumina'}
+                      referrerPolicy="strict-origin-when-cross-origin"
+                      style={{
+                        width: '100%',
+                        height: '100%',
+                        border: 'none',
+                        display: 'block',
+                      }}
+                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                      allowFullScreen
+                    ></iframe>
                   </div>
                   <div
                     style={{
