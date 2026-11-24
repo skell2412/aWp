@@ -1,6 +1,5 @@
 const BASE_URL = 'https://api.midvash.com/v1';
 
-// Mapeo amigable de libros comunes en español a los slugs que espera la API
 const LIBROS_ES = {
   genesis: 'genesis',
   exodo: 'exodus',
@@ -81,10 +80,6 @@ function normalizarTexto(texto = '') {
     .trim();
 }
 
-/**
- * Intenta parsear referencias como:
- * "juan 3 16", "juan 3:16", "salmos 23 1", "isaias 41:10"
- */
 export function parsearReferenciaBiblica(consulta) {
   const limpia = normalizarTexto(consulta);
   const match = limpia.match(/^(.+?)\s+(\d+)\s+(\d+)$/);
@@ -102,9 +97,6 @@ export function parsearReferenciaBiblica(consulta) {
   };
 }
 
-/**
- * Obtiene un versículo de Midvash API en la versión indicada (por defecto rvr1909)
- */
 export async function obtenerVersiculoMidvash(referenciaTexto, version = 'rvr1909') {
   const parsed = parsearReferenciaBiblica(referenciaTexto);
   if (!parsed) {
@@ -135,9 +127,6 @@ export async function obtenerVersiculoMidvash(referenciaTexto, version = 'rvr190
   };
 }
 
-/**
- * Obtiene el versículo del día (VOTD) desde Midvash
- */
 export async function obtenerVersiculoDelDiaMidvash(version = 'rvr1909') {
   const url = `${BASE_URL}/votd?version=${version}`;
   const res = await fetch(url);

@@ -361,7 +361,7 @@ body {
     padding: 1.5rem 1.2rem;
   }
 }
-/* ==================== ESTILOS BUSCADOR Y PANEL ADMIN ==================== */
+
 .lumina-page-shell {
   width: 100%;
   max-width: 1120px;
@@ -623,7 +623,7 @@ body.dark-mode .feedback-ok {
     grid-template-columns: 1fr;
   }
 }
-/* ==================== UNIFICACIÓN ESTÉTICA INICIO ==================== */
+
 .home-hero-wrapper {
   max-width: 880px;
   margin: 1.1rem auto 0;

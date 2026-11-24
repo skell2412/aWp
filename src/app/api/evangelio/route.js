@@ -1,11 +1,9 @@
 import { NextResponse } from 'next/server';
 import * as cheerio from 'cheerio';
 
-// Revalida automáticamente cada 1 hora (3600 segundos) para reflejar el cambio diario sin alentar la página
 export const revalidate = 3600;
 
 function obtenerFechaVaticano() {
-  // Usa la fecha actual en zona horaria de México (o local) en formato YYYY/MM/DD
   const ahora = new Date();
   const partes = new Intl.DateTimeFormat('en-CA', {
     timeZone: 'America/Mexico_City',

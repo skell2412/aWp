@@ -68,7 +68,7 @@ function BuscadorContenido() {
     document.body.classList.toggle('dark-mode', next);
     try {
       localStorage.setItem('lumina-theme', next ? 'dark' : 'light');
-    } catch (e) {}
+    } catch (e) { }
   };
 
   useEffect(() => {
@@ -438,7 +438,74 @@ function BuscadorContenido() {
           </div>
         )}
       </section>
+      <footer style={{
+        backgroundColor: 'rgba(10, 10, 12, 0.95)',
+        borderTop: '1px solid rgba(212, 175, 55, 0.2)',
+        padding: '4rem 2rem 2rem',
+        color: '#a0a0a0',
+        fontFamily: 'system-ui, -apple-system, sans-serif'
+      }}>
+        <div style={{
+          maxWidth: '1200px',
+          margin: '0 auto',
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+          gap: '3rem',
+          marginBottom: '3rem'
+        }}>
+
+          <div>
+            <h3 style={{ color: 'var(--gold-accent, #d4af37)', fontFamily: 'Cinzel, serif', fontSize: '1.5rem', marginBottom: '1rem' }}>
+              LUMINA <span style={{ fontSize: '0.8rem', verticalAlign: 'super' }}>®</span>
+            </h3>
+            <p style={{ fontSize: '0.9rem', lineHeight: '1.6' }}>
+              Iluminando tu día con la palabra y la fe. Una plataforma dedicada a acercarte a las escrituras de forma moderna.
+            </p>
+          </div>
+
+          <div>
+            <h4 style={{ color: '#fff', marginBottom: '1.2rem', fontSize: '1rem', letterSpacing: '0.05em' }}>Contacto</h4>
+            <ul style={{ listStyle: 'none', padding: 0, margin: 0, fontSize: '0.9rem', lineHeight: '2' }}>
+              <li>📧 correo@lumina.com</li>
+              <li>📞 +52 123 456 7890</li>
+              <li>📍 Av. Reforma #123, CDMX</li>
+            </ul>
+          </div>
+
+          <div>
+            <h4 style={{ color: '#fff', marginBottom: '1.2rem', fontSize: '1rem', letterSpacing: '0.05em' }}>Datos de la Empresa</h4>
+            <ul style={{ listStyle: 'none', padding: 0, margin: 0, fontSize: '0.9rem', lineHeight: '2' }}>
+              <li>Lumina Tech S.A. de C.V.</li>
+              <li>RUC / NIT: 123456789-0</li>
+              <li>Horario: Lun - Vie 9:00 - 18:00</li>
+            </ul>
+          </div>
+        </div>
+
+        <div style={{
+          maxWidth: '1200px',
+          margin: '0 auto',
+          paddingTop: '2rem',
+          borderTop: '1px solid rgba(255, 255, 255, 0.05)',
+          display: 'flex',
+          flexWrap: 'wrap',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          fontSize: '0.8rem'
+        }}>
+          <p style={{ margin: 0 }}>
+            &copy; {new Date().getFullYear()} LUMINA. Todos los derechos reservados. Marca Registrada ®.
+          </p>
+          <p style={{ margin: 0, marginTop: '0.5rem' }}>
+            Hecho con fe y tecnología.
+          </p>
+        </div>
+      </footer>
+
     </main>
+
+
+
   );
 }
 
