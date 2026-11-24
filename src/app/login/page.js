@@ -28,8 +28,20 @@ export default function LoginPage() {
 
     revisarSesion();
 
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!active) return;
+      if (session) {
+        router.replace('/admin');
+      } else {
+        setVerificandoSesion(false);
+      }
+    });
+
     return () => {
       active = false;
+      subscription.unsubscribe();
     };
   }, [router]);
 
@@ -60,7 +72,6 @@ export default function LoginPage() {
       router.replace('/admin');
     } catch (err) {
       setErrorMsg(err.message || 'Ocurrió un error al autenticar. Verifica tus credenciales.');
-    } finally {
       setCargando(false);
     }
   }
@@ -81,15 +92,14 @@ export default function LoginPage() {
         </nav>
       </header>
 
-      {/* Usamos flex: 1 para que este contenedor ocupe el resto de la pantalla y centre la tarjeta */}
       <section
         className="main-content"
-        style={{ 
-          display: 'flex', 
-          justifyContent: 'center', 
-          alignItems: 'center', 
+        style={{
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
           flex: 1,
-          padding: '2rem 1rem' 
+          padding: '2rem 1rem',
         }}
       >
         <div
@@ -97,7 +107,7 @@ export default function LoginPage() {
           style={{
             maxWidth: '420px',
             width: '100%',
-            padding: '2.5rem 2rem 2rem 2rem', // Ajuste de proporciones
+            padding: '2.5rem 2rem 2rem 2rem',
             display: 'flex',
             flexDirection: 'column',
           }}
@@ -184,13 +194,13 @@ export default function LoginPage() {
                 type="submit"
                 disabled={cargando}
                 className="btn-primary"
-                style={{ 
-                  width: '100%', 
-                  justifyContent: 'center', 
+                style={{
+                  width: '100%',
+                  justifyContent: 'center',
                   marginTop: '0.5rem',
                   padding: '0.8rem',
                   fontSize: '1rem',
-                  fontWeight: 'bold'
+                  fontWeight: 'bold',
                 }}
               >
                 {cargando ? 'Procesando...' : 'ENTRAR AL PANEL'}
@@ -198,7 +208,6 @@ export default function LoginPage() {
             </form>
           )}
 
-          {/* Este pequeño texto llena el espacio inferior de forma elegante */}
           <div style={{ marginTop: '2.5rem', textAlign: 'center', opacity: 0.5 }}>
             <p style={{ fontSize: '0.75rem', margin: 0, letterSpacing: '0.5px' }}>
               &copy; {new Date().getFullYear()} LUMINA. Solo personal autorizado.
