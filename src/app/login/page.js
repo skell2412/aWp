@@ -6,12 +6,10 @@ import { supabase } from '@/app/lib/supabase';
 
 export default function LoginPage() {
   const router = useRouter();
-  const [modoRegistro, setModoRegistro] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [cargando, setCargando] = useState(false);
   const [verificandoSesion, setVerificandoSesion] = useState(true);
-  const [mensaje, setMensaje] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
 
   useEffect(() => {
@@ -38,7 +36,6 @@ export default function LoginPage() {
   async function handleSubmit(e) {
     e.preventDefault();
     setErrorMsg('');
-    setMensaje('');
 
     if (!email.trim() || !password.trim()) {
       setErrorMsg('Completa tu correo y contraseña.');
@@ -53,40 +50,23 @@ export default function LoginPage() {
     setCargando(true);
 
     try {
-      if (modoRegistro) {
-        const { data, error } = await supabase.auth.signUp({
-          email: email.trim(),
-          password,
-        });
+      const { error } = await supabase.auth.signInWithPassword({
+        email: email.trim(),
+        password,
+      });
 
-        if (error) throw error;
+      if (error) throw error;
 
-        if (data?.session) {
-          router.replace('/admin');
-        } else {
-          setMensaje(
-            'Cuenta creada. Revisa tu correo para confirmar o desactiva "Confirm email" en Supabase si deseas entrar directo.'
-          );
-        }
-      } else {
-        const { error } = await supabase.auth.signInWithPassword({
-          email: email.trim(),
-          password,
-        });
-
-        if (error) throw error;
-
-        router.replace('/admin');
-      }
+      router.replace('/admin');
     } catch (err) {
-      setErrorMsg(err.message || 'Ocurrió un error al autenticar.');
+      setErrorMsg(err.message || 'Ocurrió un error al autenticar. Verifica tus credenciales.');
     } finally {
       setCargando(false);
     }
   }
 
   return (
-    <main className="app-container" style={{ paddingBottom: '4rem' }}>
+    <main className="app-container" style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
       <header className="app-header">
         <a href="/" className="header-brand-link">
           LUMINA
@@ -101,43 +81,51 @@ export default function LoginPage() {
         </nav>
       </header>
 
+      {/* Usamos flex: 1 para que este contenedor ocupe el resto de la pantalla y centre la tarjeta */}
       <section
         className="main-content"
-        style={{ display: 'flex', justifyContent: 'center', marginTop: '2rem' }}
+        style={{ 
+          display: 'flex', 
+          justifyContent: 'center', 
+          alignItems: 'center', 
+          flex: 1,
+          padding: '2rem 1rem' 
+        }}
       >
         <div
           className="hero-card"
           style={{
-            maxWidth: '460px',
+            maxWidth: '420px',
             width: '100%',
-            padding: '2rem',
-            display: 'block',
+            padding: '2.5rem 2rem 2rem 2rem', // Ajuste de proporciones
+            display: 'flex',
+            flexDirection: 'column',
           }}
         >
-          <p className="welcome-subtitle">ACCESO RESTRINGIDO</p>
+          <p className="welcome-subtitle" style={{ marginBottom: '0.5rem' }}>
+            ACCESO RESTRINGIDO
+          </p>
           <h1
             className="title-lumina"
-            style={{ fontSize: '1.75rem', marginBottom: '0.5rem' }}
+            style={{ fontSize: '1.75rem', marginBottom: '0.5rem', letterSpacing: '1px' }}
           >
-            {modoRegistro ? 'REGISTRAR ADMIN' : 'INICIAR SESIÓN'}
+            INICIAR SESIÓN
           </h1>
-          <p className="hero-description" style={{ marginBottom: '1.25rem' }}>
-            {modoRegistro
-              ? 'Crea una cuenta de administrador para gestionar los versículos de Lumina.'
-              : 'Ingresa con tu cuenta de administrador para añadir, editar o eliminar pasajes.'}
+          <p className="hero-description" style={{ marginBottom: '2rem', fontSize: '0.95rem', lineHeight: '1.5' }}>
+            Ingresa con tu cuenta de administrador para añadir, editar o eliminar pasajes.
           </p>
 
           {verificandoSesion ? (
-            <p>Verificando sesión...</p>
+            <p style={{ textAlign: 'center', opacity: 0.7 }}>Verificando sesión...</p>
           ) : (
             <form
               onSubmit={handleSubmit}
-              style={{ display: 'flex', flexDirection: 'column', gap: '0.9rem' }}
+              style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem' }}
             >
               <div>
                 <label
                   htmlFor="admin-email"
-                  style={{ display: 'block', marginBottom: '0.35rem', fontSize: '0.9rem' }}
+                  style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.9rem', fontWeight: '500' }}
                 >
                   Correo electrónico
                 </label>
@@ -150,11 +138,12 @@ export default function LoginPage() {
                   required
                   style={{
                     width: '100%',
-                    padding: '0.75rem 0.9rem',
-                    borderRadius: '10px',
+                    padding: '0.8rem 1rem',
+                    borderRadius: '8px',
                     border: '1px solid rgba(212, 175, 55, 0.35)',
                     background: 'rgba(255, 255, 255, 0.06)',
                     color: 'inherit',
+                    outline: 'none',
                   }}
                 />
               </div>
@@ -162,7 +151,7 @@ export default function LoginPage() {
               <div>
                 <label
                   htmlFor="admin-password"
-                  style={{ display: 'block', marginBottom: '0.35rem', fontSize: '0.9rem' }}
+                  style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.9rem', fontWeight: '500' }}
                 >
                   Contraseña
                 </label>
@@ -175,24 +164,19 @@ export default function LoginPage() {
                   required
                   style={{
                     width: '100%',
-                    padding: '0.75rem 0.9rem',
-                    borderRadius: '10px',
+                    padding: '0.8rem 1rem',
+                    borderRadius: '8px',
                     border: '1px solid rgba(212, 175, 55, 0.35)',
                     background: 'rgba(255, 255, 255, 0.06)',
                     color: 'inherit',
+                    outline: 'none',
                   }}
                 />
               </div>
 
               {errorMsg && (
-                <p style={{ color: '#f87171', fontSize: '0.9rem', margin: 0 }}>
+                <p style={{ color: '#f87171', fontSize: '0.85rem', margin: 0, textAlign: 'center' }}>
                   {errorMsg}
-                </p>
-              )}
-
-              {mensaje && (
-                <p style={{ color: '#4ade80', fontSize: '0.9rem', margin: 0 }}>
-                  {mensaje}
                 </p>
               )}
 
@@ -200,39 +184,25 @@ export default function LoginPage() {
                 type="submit"
                 disabled={cargando}
                 className="btn-primary"
-                style={{ width: '100%', justifyContent: 'center', marginTop: '0.35rem' }}
+                style={{ 
+                  width: '100%', 
+                  justifyContent: 'center', 
+                  marginTop: '0.5rem',
+                  padding: '0.8rem',
+                  fontSize: '1rem',
+                  fontWeight: 'bold'
+                }}
               >
-                {cargando
-                  ? 'Procesando...'
-                  : modoRegistro
-                  ? 'CREAR CUENTA ADMIN'
-                  : 'ENTRAR AL PANEL'}
+                {cargando ? 'Procesando...' : 'ENTRAR AL PANEL'}
               </button>
             </form>
           )}
 
-          <div style={{ marginTop: '1.25rem', textAlign: 'center' }}>
-            <button
-              type="button"
-              onClick={() => {
-                setModoRegistro(!modoRegistro);
-                setErrorMsg('');
-                setMensaje('');
-              }}
-              style={{
-                background: 'transparent',
-                border: 'none',
-                color: 'inherit',
-                textDecoration: 'underline',
-                cursor: 'pointer',
-                fontSize: '0.9rem',
-                opacity: 0.85,
-              }}
-            >
-              {modoRegistro
-                ? '¿Ya tienes cuenta? Inicia sesión aquí'
-                : '¿Primera vez? Registra tu cuenta de administrador'}
-            </button>
+          {/* Este pequeño texto llena el espacio inferior de forma elegante */}
+          <div style={{ marginTop: '2.5rem', textAlign: 'center', opacity: 0.5 }}>
+            <p style={{ fontSize: '0.75rem', margin: 0, letterSpacing: '0.5px' }}>
+              &copy; {new Date().getFullYear()} LUMINA. Solo personal autorizado.
+            </p>
           </div>
         </div>
       </section>

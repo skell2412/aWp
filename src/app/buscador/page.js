@@ -3,42 +3,37 @@
 import { Suspense, useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { supabase } from '@/app/lib/supabase';
+import Link from 'next/link';
 import {
   obtenerVersiculoMidvash,
   obtenerVersiculoDelDiaMidvash,
 } from '@/app/lib/midvash';
+
 const ESTADOS_ANIMO = ['Todos', 'Paz', 'Fortaleza', 'Consuelo', 'Gratitud'];
 
 const MAPA_VERSIONES = {
-  rvr1909: {
-    etiqueta: 'Reina-Valera 1909',
-    claves: ['RVR1909', 'REINA-VALERA', 'REINA VALERA'],
-  },
-  rvg: {
-    etiqueta: 'Reina-Valera Gómez',
-    claves: ['RVG', 'REINA-VALERA GÓMEZ', 'REINA VALERA GOMEZ', 'GÓMEZ', 'GOMEZ'],
-  },
-  pdt: {
-    etiqueta: 'Palabra de Dios para ti',
-    claves: ['PDT', 'PALABRA DE DIOS PARA TI'],
-  },
-  'onbv-es': {
-    etiqueta: 'Open Nueva Biblia Viva',
-    claves: ['ONBV-ES', 'NUEVA BIBLIA VIVA'],
-  },
-  sev: {
-    etiqueta: 'Sagradas Escrituras 1569',
-    claves: ['SEV', 'SAGRADAS ESCRITURAS'],
-  },
+  rvr1909: { etiqueta: 'Reina-Valera 1909', claves: ['RVR1909', 'REINA-VALERA', 'REINA VALERA'] },
+  rvg: { etiqueta: 'Reina-Valera Gómez', claves: ['RVG', 'REINA-VALERA GÓMEZ', 'REINA VALERA GOMEZ', 'GÓMEZ', 'GOMEZ'] },
+  pdt: { etiqueta: 'Palabra de Dios para ti', claves: ['PDT', 'PALABRA DE DIOS PARA TI'] },
+  'onbv-es': { etiqueta: 'Open Nueva Biblia Viva', claves: ['ONBV-ES', 'NUEVA BIBLIA VIVA'] },
+  sev: { etiqueta: 'Sagradas Escrituras 1569', claves: ['SEV', 'SAGRADAS ESCRITURAS'] },
 };
 
 function coincideConVersion(item, codigoVersion) {
   if (!codigoVersion || codigoVersion === 'todas') return true;
   const info = MAPA_VERSIONES[codigoVersion];
   if (!info) return true;
-
   const textoComparar = `${item.badge || ''} ${item.subtitulo || ''} ${item.referencia || ''}`.toUpperCase();
   return info.claves.some((clave) => textoComparar.includes(clave.toUpperCase()));
+}
+
+function getYouTubeEmbedUrl(url) {
+  if (!url || typeof url !== 'string') return '';
+  const match = url.match(
+    /(?:youtu\.be\/|youtube\.com\/(?:watch\?.*v=|embed\/|v\/|shorts\/|live\/))([a-zA-Z0-9_-]{11})/
+  );
+  if (!match || !match[1]) return '';
+  return `https://www.youtube.com/embed/${match[1]}?rel=0&modestbranding=1`;
 }
 
 function BuscadorContenido() {
@@ -53,15 +48,16 @@ function BuscadorContenido() {
   const [versiculosDb, setVersiculosDb] = useState([]);
   const [cargandoDb, setCargandoDb] = useState(true);
 
+  const [videosDb, setVideosDb] = useState([]);
+  const [cargandoVideos, setCargandoVideos] = useState(true);
+
   const [resultadoBiblia, setResultadoBiblia] = useState(null);
   const [cargandoBiblia, setCargandoBiblia] = useState(false);
   const [errorBiblia, setErrorBiblia] = useState('');
 
   useEffect(() => {
     const saved = localStorage.getItem('lumina-theme');
-    const isDark = saved
-      ? saved === 'dark'
-      : document.body.classList.contains('dark-mode');
+    const isDark = saved ? saved === 'dark' : document.body.classList.contains('dark-mode');
     setDarkMode(isDark);
     document.body.classList.toggle('dark-mode', isDark);
   }, []);
@@ -77,39 +73,41 @@ function BuscadorContenido() {
 
   useEffect(() => {
     if (!estadoInicial) return;
-    const match = ESTADOS_ANIMO.find(
-      (e) => e.toLowerCase() === estadoInicial.toLowerCase()
-    );
-    if (match) {
-      setEstadoSeleccionado(match);
-    }
+    const match = ESTADOS_ANIMO.find((e) => e.toLowerCase() === estadoInicial.toLowerCase());
+    if (match) setEstadoSeleccionado(match);
   }, [estadoInicial]);
 
-  async function cargarVersiculos() {
-    setCargandoDb(true);
-    const { data, error } = await supabase
-      .from('versiculos')
-      .select('*')
-      .order('created_at', { ascending: false });
-
-    if (!error && Array.isArray(data)) {
-      setVersiculosDb(data);
+  useEffect(() => {
+    async function cargarVersiculos() {
+      setCargandoDb(true);
+      const { data, error } = await supabase
+        .from('versiculos')
+        .select('*')
+        .order('created_at', { ascending: false });
+      if (!error && Array.isArray(data)) setVersiculosDb(data);
+      setCargandoDb(false);
     }
-    setCargandoDb(false);
-  }
+    cargarVersiculos();
+  }, []);
 
   useEffect(() => {
-    cargarVersiculos();
+    async function cargarVideos() {
+      setCargandoVideos(true);
+      const { data, error } = await supabase
+        .from('videos')
+        .select('*')
+        .order('created_at', { ascending: false });
+      if (!error && Array.isArray(data)) setVideosDb(data);
+      setCargandoVideos(false);
+    }
+    cargarVideos();
   }, []);
 
   const versiculosFiltrados = versiculosDb.filter((item) => {
     const coincideEstado =
       estadoSeleccionado === 'Todos' ||
-      (item.estado_animo || '').toLowerCase() ===
-        estadoSeleccionado.toLowerCase();
-
+      (item.estado_animo || '').toLowerCase() === estadoSeleccionado.toLowerCase();
     const coincideVersion = coincideConVersion(item, versionBiblia);
-
     const termino = busqueda.trim().toLowerCase();
     const coincideTexto =
       !termino ||
@@ -119,7 +117,6 @@ function BuscadorContenido() {
       (item.subtitulo || '').toLowerCase().includes(termino) ||
       (item.badge || '').toLowerCase().includes(termino) ||
       (item.estado_animo || '').toLowerCase().includes(termino);
-
     return coincideEstado && coincideVersion && coincideTexto;
   });
 
@@ -129,12 +126,10 @@ function BuscadorContenido() {
     e.preventDefault();
     setErrorBiblia('');
     setResultadoBiblia(null);
-
     if (!busqueda.trim()) {
       setErrorBiblia('Escribe una cita como "Juan 3:16" o "Salmos 23:1".');
       return;
     }
-
     setCargandoBiblia(true);
     try {
       const versiculo = await obtenerVersiculoMidvash(busqueda, versionApiEfectiva);
@@ -150,7 +145,6 @@ function BuscadorContenido() {
     setErrorBiblia('');
     setResultadoBiblia(null);
     setCargandoBiblia(true);
-
     try {
       const personalizado = versiculosDb.find((item) => {
         const badgeTexto = (item.badge || '').toUpperCase();
@@ -162,24 +156,18 @@ function BuscadorContenido() {
           tituloTexto.includes('VERSICULO DEL DIA')
         );
       });
-
       if (personalizado) {
         setResultadoBiblia({
-          titulo: personalizado.titulo || 'VERSÍCULO DEL DÍA',
-          subtitulo:
-            personalizado.subtitulo ||
-            personalizado.estado_animo ||
-            'REFLEXIÓN LUMINA',
+          titulo: personalizado.titulo,
+          subtitulo: personalizado.subtitulo || personalizado.estado_animo || 'REFLEXIÓN LUMINA',
           badge: personalizado.badge || 'VERSÍCULO DEL DÍA',
           descripcion: personalizado.descripcion || '',
           referencia: personalizado.referencia || 'LUMINA · CATÁLOGO',
         });
         return;
       }
-
       const votd = await obtenerVersiculoDelDiaMidvash(versionApiEfectiva);
       const textoLimpio = (votd?.descripcion || '').trim();
-
       if (!textoLimpio) {
         setResultadoBiblia({
           titulo: votd?.titulo || 'VERSÍCULO DEL DÍA',
@@ -191,7 +179,6 @@ function BuscadorContenido() {
         });
         return;
       }
-
       setResultadoBiblia(votd);
     } catch (err) {
       setErrorBiblia(err.message || 'No se pudo cargar el versículo del día.');
@@ -208,21 +195,19 @@ function BuscadorContenido() {
   return (
     <main className="lumina-page-shell">
       <header className="app-header">
-        <a href="/" className="header-brand-link">
+        <Link href="/" className="header-brand-link">
           LUMINA
-        </a>
-        <a href="/" className="header-logo-badge" title="Inicio">
-          <span style={{ fontSize: '1.2rem', color: 'var(--gold-accent)' }}>
-            ✝
-          </span>
-        </a>
+        </Link>
+        <Link href="/" className="header-logo-badge" title="Inicio">
+          <span style={{ fontSize: '1.2rem', color: 'var(--gold-accent)' }}>✝</span>
+        </Link>
         <nav className="header-nav-icons">
-          <a href="/" className="nav-icon-link" title="Inicio">
+          <Link href="/" className="nav-icon-link" title="Inicio">
             <i className="fa-solid fa-house"></i>
-          </a>
-          <a href="/buscador" className="nav-icon-link active" title="Buscador">
+          </Link>
+          <Link href="/buscador" className="nav-icon-link active" title="Buscador">
             <i className="fa-solid fa-magnifying-glass"></i>
-          </a>
+          </Link>
           <button
             type="button"
             onClick={toggleTheme}
@@ -231,9 +216,9 @@ function BuscadorContenido() {
           >
             <i className={`fa-solid ${darkMode ? 'fa-sun' : 'fa-moon'}`}></i>
           </button>
-          <a href="/login" className="nav-icon-link" title="Panel Admin">
+          <Link href="/login" className="nav-icon-link" title="Panel Admin">
             <i className="fa-solid fa-user-shield"></i>
-          </a>
+          </Link>
         </nav>
       </header>
 
@@ -255,7 +240,6 @@ function BuscadorContenido() {
               onChange={(e) => setBusqueda(e.target.value)}
               placeholder='Busca por libro, autor o cita (ej. "Juan", "Salmos", "Juan 3:16")...'
             />
-
             <select
               className="lumina-select"
               value={versionBiblia}
@@ -269,11 +253,9 @@ function BuscadorContenido() {
               <option value="onbv-es">Open Nueva Biblia Viva</option>
               <option value="sev">Sagradas Escrituras 1569</option>
             </select>
-
             <button type="submit" className="btn-primary">
               <i className="fa-solid fa-book-bible"></i> BUSCAR CITA
             </button>
-
             <button
               type="button"
               onClick={handleVersiculoDelDia}
@@ -303,30 +285,21 @@ function BuscadorContenido() {
 
       {(cargandoBiblia || errorBiblia || resultadoBiblia) && (
         <section className="section-shell">
-          {cargandoBiblia && (
-            <p className="section-subcopy">Consultando escritura...</p>
-          )}
+          {cargandoBiblia && <p className="section-subcopy">Consultando escritura...</p>}
           {errorBiblia && <p className="feedback-error">{errorBiblia}</p>}
-
           {resultadoBiblia && (
             <article className="lumina-panel" style={{ marginTop: '0.75rem' }}>
               <div className="verse-card-meta">
                 <span>{resultadoBiblia.badge}</span>
                 <span>{resultadoBiblia.subtitulo}</span>
               </div>
-              <h2
-                className="verse-card-title"
-                style={{ fontSize: '1.35rem', marginTop: '0.45rem' }}
-              >
+              <h2 className="verse-card-title" style={{ fontSize: '1.35rem', marginTop: '0.45rem' }}>
                 {resultadoBiblia.titulo}
               </h2>
               <p className="verse-card-body" style={{ marginTop: '0.7rem' }}>
                 “{resultadoBiblia.descripcion}”
               </p>
-              <p
-                className="section-subcopy"
-                style={{ fontSize: '0.82rem', marginBottom: 0 }}
-              >
+              <p className="section-subcopy" style={{ fontSize: '0.82rem', marginBottom: 0 }}>
                 {resultadoBiblia.referencia}
               </p>
             </article>
@@ -348,9 +321,7 @@ function BuscadorContenido() {
         </div>
 
         {cargandoDb ? (
-          <p className="section-subcopy">
-            Cargando pasajes desde la base de datos...
-          </p>
+          <p className="section-subcopy">Cargando pasajes desde la base de datos...</p>
         ) : versiculosFiltrados.length === 0 ? (
           <div className="lumina-panel">
             <p className="section-subcopy" style={{ margin: 0 }}>
@@ -371,12 +342,117 @@ function BuscadorContenido() {
                     {item.descripcion}
                   </p>
                 </div>
-
                 <div className="verse-card-footer">
                   <span>{item.referencia}</span>
                 </div>
               </article>
             ))}
+          </div>
+        )}
+      </section>
+
+      <section className="section-shell" style={{ paddingBottom: '4rem' }}>
+        <div className="section-heading-row">
+          <div>
+            <h2 className="title-lumina" style={{ fontSize: '1.35rem', margin: 0 }}>
+              VIDEOS Y REFLEXIONES
+            </h2>
+            <p className="section-subcopy" style={{ margin: '0.25rem 0 0' }}>
+              Contenido audiovisual seleccionado para acompañar tu estudio.
+            </p>
+          </div>
+        </div>
+
+        {cargandoVideos ? (
+          <p className="section-subcopy">Cargando videos...</p>
+        ) : videosDb.length === 0 ? (
+          <div className="lumina-panel">
+            <p className="section-subcopy" style={{ margin: 0 }}>
+              Aún no hay videos disponibles.
+            </p>
+          </div>
+        ) : (
+          <div className="verses-grid">
+            {videosDb.map((video) => {
+              const embedUrl = getYouTubeEmbedUrl(video.url);
+
+              return (
+                <article
+                  key={video.id}
+                  className="verse-card"
+                  style={{ padding: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}
+                >
+                  <div
+                    style={{
+                      position: 'relative',
+                      width: '100%',
+                      paddingTop: '56.25%',
+                      backgroundColor: '#0e0f14',
+                    }}
+                  >
+                    {embedUrl ? (
+                      <iframe
+                        src={embedUrl}
+                        title={video.titulo || 'Video de Lumina'}
+                        referrerPolicy="strict-origin-when-cross-origin"
+                        style={{
+                          position: 'absolute',
+                          top: 0,
+                          left: 0,
+                          width: '100%',
+                          height: '100%',
+                          border: 'none',
+                        }}
+                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                        allowFullScreen
+                      ></iframe>
+                    ) : (
+                      <div
+                        style={{
+                          position: 'absolute',
+                          inset: 0,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          padding: '1rem',
+                          textAlign: 'center',
+                          fontSize: '0.85rem',
+                          opacity: 0.75,
+                        }}
+                      >
+                        Enlace no compatible con reproductor integrado
+                      </div>
+                    )}
+                  </div>
+                  <div
+                    style={{
+                      padding: '1rem',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '0.5rem',
+                    }}
+                  >
+                    <h3 className="verse-card-title" style={{ fontSize: '1.1rem', margin: 0 }}>
+                      {video.titulo}
+                    </h3>
+                    {video.url && (
+                      <a
+                        href={video.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        style={{
+                          fontSize: '0.8rem',
+                          color: 'var(--gold-accent)',
+                          textDecoration: 'underline',
+                        }}
+                      >
+                        ¿El video no carga? Abrir en YouTube
+                      </a>
+                    )}
+                  </div>
+                </article>
+              );
+            })}
           </div>
         )}
       </section>
